@@ -1,73 +1,46 @@
-# Install context wiki into ~/.cursor/
+# Optional shortcut — same steps as docs/SETUP.md
+# Installs context wiki runtime to ~/.cursor/wiki/
 param(
     [string]$RepoRoot = (Split-Path -Parent $PSScriptRoot)
 )
 
 $ErrorActionPreference = "Stop"
-$CursorDir = Join-Path $env:USERPROFILE ".cursor"
-$ContextDir = Join-Path $CursorDir "context"
-$RulesDir = Join-Path $CursorDir "rules"
-$SkillsDir = Join-Path $CursorDir "skills\lint-context"
-$HooksFile = Join-Path $CursorDir "hooks.json"
+Write-Host "Context Wiki install (optional shortcut — see docs/SETUP.md)"
+Write-Host "Source: $RepoRoot"
 
-Write-Host "Installing from: $RepoRoot"
+$installer = Join-Path $RepoRoot "scripts\install_wiki.py"
+if (-not (Test-Path $installer)) {
+    Write-Error "Missing $installer — clone the full repository first."
+}
 
-# Rules
-New-Item -ItemType Directory -Force -Path $RulesDir | Out-Null
-Copy-Item "$RepoRoot\cursor\rules\*.mdc" $RulesDir -Force
-Write-Host "Rules installed to $RulesDir"
-
-# Skill
-New-Item -ItemType Directory -Force -Path $SkillsDir | Out-Null
-Copy-Item "$RepoRoot\skills\lint-context\SKILL.md" $SkillsDir -Force
-Write-Host "Skill installed to $SkillsDir"
-
-# Context dir from templates
-New-Item -ItemType Directory -Force -Path $ContextDir | Out-Null
-New-Item -ItemType Directory -Force -Path (Join-Path $ContextDir "sessions") | Out-Null
-New-Item -ItemType Directory -Force -Path (Join-Path $ContextDir "extracts") | Out-Null
-$synthDir = Join-Path $ContextDir "synthesis"
-New-Item -ItemType Directory -Force -Path $synthDir | Out-Null
-
-foreach ($f in Get-ChildItem "$RepoRoot\templates\synthesis\*.md") {
-    $dest = Join-Path $synthDir $f.Name
-    if (-not (Test-Path $dest)) {
-        Copy-Item $f.FullName $dest
+# Find Python
+$python = $null
+foreach ($cmd in @("py", "python3", "python")) {
+    $found = Get-Command $cmd -ErrorAction SilentlyContinue
+    if ($found) {
+        if ($cmd -eq "py") { $python = "py -3" } else { $python = $found.Source }
+        break
     }
 }
-
-if (-not (Test-Path (Join-Path $ContextDir "wiki_config.json"))) {
-    Copy-Item "$RepoRoot\templates\wiki_config.example.json" (Join-Path $ContextDir "wiki_config.json")
+if (-not $python) {
+    $localPy = Get-ChildItem "$env:LOCALAPPDATA\Python\pythoncore-*\python.exe" -ErrorAction SilentlyContinue |
+        Sort-Object FullName -Descending | Select-Object -First 1
+    if ($localPy) { $python = $localPy.FullName }
 }
-if (-not (Test-Path (Join-Path $ContextDir "wiki_state.json"))) {
-    '{"last_extract":null,"last_synthesis":null,"pending_sessions":[]}' | Set-Content (Join-Path $ContextDir "wiki_state.json")
-}
-if (-not (Test-Path (Join-Path $ContextDir "INDEX.md"))) {
-    "# Session Index`n`n*No sessions yet.*`n" | Set-Content (Join-Path $ContextDir "INDEX.md")
-}
-Write-Host "Context dir initialized at $ContextDir"
-
-# Merge hooks.json
-$wikiHooks = @{
-    sessionStart = @(@{
-        command = "powershell -ExecutionPolicy Bypass -File `"$RepoRoot\hooks\wiki-on-start.ps1`""
-        timeout = 120
-    })
-    beforeSubmitPrompt = @(@{
-        command = "powershell -ExecutionPolicy Bypass -File `"$RepoRoot\hooks\inject-wiki-drain.ps1`""
-        matcher = "UserPromptSubmit"
-        timeout = 15
-    })
+if (-not $python) {
+    Write-Error "Python 3 not found. Install Python 3 and retry, or follow docs/SETUP.md step 2."
 }
 
-if (Test-Path $HooksFile) {
-    $existing = Get-Content $HooksFile -Raw | ConvertFrom-Json
-    if (-not $existing.hooks) { $existing | Add-Member -NotePropertyName hooks -NotePropertyValue (@{}) }
-    $existing.hooks.sessionStart = $wikiHooks.sessionStart
-    $existing.hooks.beforeSubmitPrompt = $wikiHooks.beforeSubmitPrompt
-    $existing | ConvertTo-Json -Depth 10 | Set-Content $HooksFile
+Write-Host "Using Python: $python"
+if ($python -match '\s') {
+    $parts = $python -split '\s+'
+    & $parts[0] $parts[1] $installer --source-repo $RepoRoot
 } else {
-    @{ version = 1; hooks = $wikiHooks } | ConvertTo-Json -Depth 10 | Set-Content $HooksFile
+    & $python $installer --source-repo $RepoRoot
 }
-Write-Host "Hooks merged into $HooksFile"
+
+if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne 1) {
+    Write-Error "Install failed (exit $LASTEXITCODE). See docs/TROUBLESHOOTING.md"
+}
+
 Write-Host "Done. Restart Cursor."

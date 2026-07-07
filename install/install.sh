@@ -1,30 +1,31 @@
 #!/usr/bin/env bash
-# Install context wiki into ~/.cursor/
+# Optional shortcut — same steps as docs/SETUP.md
+# Installs context wiki runtime to ~/.cursor/wiki/
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-CURSOR_DIR="${HOME}/.cursor"
-CONTEXT_DIR="${CURSOR_DIR}/context"
+INSTALLER="${REPO_ROOT}/scripts/install_wiki.py"
 
-echo "Installing from: $REPO_ROOT"
+echo "Context Wiki install (optional shortcut — see docs/SETUP.md)"
+echo "Source: ${REPO_ROOT}"
 
-mkdir -p "${CURSOR_DIR}/rules"
-cp "${REPO_ROOT}/cursor/rules/"*.mdc "${CURSOR_DIR}/rules/"
+if [[ ! -f "${INSTALLER}" ]]; then
+  echo "ERROR: Missing ${INSTALLER} — clone the full repository first." >&2
+  exit 1
+fi
 
-mkdir -p "${CURSOR_DIR}/skills/lint-context"
-cp "${REPO_ROOT}/skills/lint-context/SKILL.md" "${CURSOR_DIR}/skills/lint-context/"
-
-mkdir -p "${CONTEXT_DIR}/sessions" "${CONTEXT_DIR}/extracts" "${CONTEXT_DIR}/synthesis"
-for f in "${REPO_ROOT}/templates/synthesis/"*.md; do
-  base=$(basename "$f")
-  [[ -f "${CONTEXT_DIR}/synthesis/${base}" ]] || cp "$f" "${CONTEXT_DIR}/synthesis/${base}"
+PYTHON=""
+for cmd in python3 python; do
+  if command -v "$cmd" &>/dev/null; then
+    PYTHON="$cmd"
+    break
+  fi
 done
+if [[ -z "${PYTHON}" ]]; then
+  echo "ERROR: Python 3 not found. Install Python 3 and retry." >&2
+  exit 1
+fi
 
-[[ -f "${CONTEXT_DIR}/wiki_config.json" ]] || cp "${REPO_ROOT}/templates/wiki_config.example.json" "${CONTEXT_DIR}/wiki_config.json"
-[[ -f "${CONTEXT_DIR}/wiki_state.json" ]] || echo '{"last_extract":null,"last_synthesis":null,"pending_sessions":[]}' > "${CONTEXT_DIR}/wiki_state.json"
-[[ -f "${CONTEXT_DIR}/INDEX.md" ]] || printf '# Session Index\n\n*No sessions yet.*\n' > "${CONTEXT_DIR}/INDEX.md"
-
-HOOKS_FILE="${CURSOR_DIR}/hooks.json"
-echo "Merge hooks manually — see docs/CURSOR_INTEGRATION.md"
-echo "Repo hooks: ${REPO_ROOT}/hooks/"
-echo "Done."
+echo "Using Python: ${PYTHON}"
+"${PYTHON}" "${INSTALLER}" --source-repo "${REPO_ROOT}" --bash-hooks
+exit $?
