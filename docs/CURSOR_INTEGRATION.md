@@ -70,6 +70,7 @@ Copy `cursor/rules/*.mdc` to `~/.cursor/rules/`.
 | `WIKI_HOME` | `~/.cursor/wiki` | Runtime (scripts, hooks) |
 | `CONTEXT_WIKI_DIR` | `~/.cursor/context` | Wiki data directory |
 | `WIKI_PYTHON` | auto-detect | Python for hooks (see `wiki.env`) |
+| `synthesis_model` in `wiki_config.json` | `claude-4.5-haiku-thinking` | Model for Layer 2+3 subagents (e.g. `composer-2.5-fast`) |
 | `CURSOR_PROJECT_SLUG` | auto-detect | Transcript source project |
 | `TRANSCRIPTS_DIR` | auto-detect | Override transcript path |
 

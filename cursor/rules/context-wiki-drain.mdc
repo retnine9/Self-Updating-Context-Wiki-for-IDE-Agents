@@ -10,6 +10,19 @@ alwaysApply: true
 1. **sessionStart hook** — `update_wiki.py --all` extracts new transcripts and prepares pending synthesis (unless `.wiki_skip` exists or `auto_update_on_session_start` is false in `wiki_config.json`).
 2. **First user message** — if `.drain_required.json` exists, complete synthesis before addressing the user.
 
+## Synthesis model (required)
+
+Layers 2+3 are transcript summarization — **do not use the session's main model** (Opus, Fable, etc.).
+
+Read `synthesis_model` from `--manifest` output (default: `claude-4.5-haiku-thinking` in `wiki_config.json`). Spawn **Task subagents** with that model for all prose work:
+
+| Layer | Subagent |
+|-------|----------|
+| 2 | One per `layer2_batches` entry — write all `extract_path` files in the batch |
+| 3 | One subagent — rewrite all six `synthesis/*.md` files |
+
+The parent agent orchestrates (`--manifest`, `--complete`) only. Override model in `context/wiki_config.json` (e.g. `composer-2.5-fast`).
+
 ## Skip for This Session
 
 - Create `context/.wiki_skip` before starting, or
@@ -19,11 +32,8 @@ alwaysApply: true
 ## Drain Protocol (MANDATORY when pending)
 
 1. Run `python scripts/update_wiki.py --manifest`
-2. **Layer 2** — For each batch in `layer2_batches`, write extracts using the 7-section template:
-   - Decisions, Errors, Rejected approaches, Constraints, Technical debt, Open questions, Summary
-   - 300–500 words total per extract; cite only what is in the transcript
-   - Batch up to 10 sessions per subagent when many are pending
-3. **Layer 3** — Read new extracts; update all six `synthesis/*.md` files in-place (complete replacements, preserve stable history)
+2. **Layer 2** — subagents with `synthesis_model`; 7-section template, 300–500 words, transcript facts only
+3. **Layer 3** — one subagent with `synthesis_model`; complete file replacements, preserve stable history
 4. Run `python scripts/update_wiki.py --complete`
 
 One informational line in the first response ("Draining N pending session(s)…") is enough. Do not ask permission.

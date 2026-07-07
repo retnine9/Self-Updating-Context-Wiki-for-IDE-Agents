@@ -30,10 +30,10 @@ python ~/.cursor/wiki/scripts/doctor.py
 | Layer | What | Runs on |
 |-------|------|---------|
 | 1 | JSONL → readable session markdown | Python (`update_wiki.py --extract`) |
-| 2 | Session → 7-section extract | Agent LLM |
-| 3 | Extracts → cross-session wiki | Agent LLM |
+| 2 | Session → 7-section extract | Task subagent (`synthesis_model`, default Haiku) |
+| 3 | Extracts → cross-session wiki | Task subagent (`synthesis_model`) |
 
-No API keys needed.
+No API keys needed. Synthesis uses a cheap configured model, not your session model.
 
 ## Triggers
 

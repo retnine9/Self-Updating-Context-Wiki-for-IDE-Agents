@@ -1,4 +1,5 @@
 {
   "auto_update_on_session_start": true,
-  "batch_size": 10
+  "batch_size": 10,
+  "synthesis_model": "claude-4.5-haiku-thinking"
 }

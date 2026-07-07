@@ -17,6 +17,9 @@ if str(_REPO) not in sys.path:
 
 from lib.paths import EXTRACTS_DIR, EXTRACT_SECTIONS, SESSIONS_DIR, SYNTHESIS_DIR, SYNTHESIS_FILES
 
+# Cheap-but-capable default for transcript summarization (override in wiki_config.json).
+DEFAULT_SYNTHESIS_MODEL = "claude-4.5-haiku-thinking"
+
 SYNTHESIS_PROMPT = """Read this session transcript and extract, using only what is explicitly stated:
 
 1. **Decisions** -- key choices made and the stated reasoning
@@ -115,11 +118,48 @@ def build_layer2_batches(sessions: list[Path], batch_size: int = 10) -> list[dic
     return batches
 
 
+def build_agent_instructions(synthesis_model: str, scripts_dir: str) -> str:
+    return (
+        "MANDATORY: Complete wiki synthesis before addressing the user's request.\n"
+        f"Use model {synthesis_model!r} for ALL Layer 2 and Layer 3 LLM work — do not "
+        "synthesize on the session's main model (e.g. Opus/Fable).\n"
+        "1. Layer 2: spawn one Task subagent per layer2_batches entry with "
+        f'model="{synthesis_model}". Each subagent writes every extract_path in its batch.\n'
+        "2. Layer 3: spawn one Task subagent with the same model to read new extracts "
+        "and rewrite all six layer3_files per layer3_instruction.\n"
+        f"3. Run: python {scripts_dir}/update_wiki.py --complete\n"
+        "4. Remove .drain_required.json if still present.\n"
+        "You may run --manifest and --complete inline; prose synthesis must use subagents."
+    )
+
+
+def build_drain_agent_message(
+    pending_count: int,
+    synthesis_model: str,
+    wiki_home: str,
+) -> str:
+    scripts = f"{wiki_home}/scripts/update_wiki.py".replace("\\", "/")
+    return (
+        f"MANDATORY CONTEXT WIKI DRAIN: {pending_count} session(s) need synthesis "
+        f"before you address the user's request.\n\n"
+        f"Synthesis model (required): {synthesis_model}\n"
+        "Do NOT run Layer 2/3 on your session model — spawn Task subagents with this model.\n\n"
+        f"1. Run: python {scripts} --manifest\n"
+        f"2. Layer 2: one subagent per layer2_batches batch (model={synthesis_model})\n"
+        f"3. Layer 3: one subagent to update all six synthesis files (model={synthesis_model})\n"
+        f"4. Run: python {scripts} --complete\n\n"
+        "Use only facts from session transcripts. Then proceed with the user's request.\n"
+        "If the user said to skip wiki update, run --complete and delete .drain_required.json."
+    )
+
+
 def build_full_manifest(
     pending_sessions: list[Path],
     batch_size: int = 10,
+    synthesis_model: str = DEFAULT_SYNTHESIS_MODEL,
 ) -> dict:
     return {
+        "synthesis_model": synthesis_model,
         "layer2_batches": build_layer2_batches(pending_sessions, batch_size),
         "layer2_template_sections": EXTRACT_SECTIONS,
         "layer3_files": [
@@ -131,10 +171,11 @@ def build_full_manifest(
             for name in SYNTHESIS_FILES
         ],
         "layer3_instruction": (
-            "After Layer 2 extracts are written, read each new extract and update all "
-            "six synthesis files in-place. Output complete replacement files. "
-            "Preserve existing content unless new extracts supersede it. "
-            "Prefer newer extract over older when contradictions arise."
+            f"After Layer 2 extracts are written, read each new extract and update all "
+            f"six synthesis files in-place. Output complete replacement files. "
+            f"Preserve existing content unless new extracts supersede it. "
+            f"Prefer newer extract over older when contradictions arise. "
+            f"Run this step on model {synthesis_model!r} (not the session's main model)."
         ),
         "pending_count": len(pending_sessions),
     }

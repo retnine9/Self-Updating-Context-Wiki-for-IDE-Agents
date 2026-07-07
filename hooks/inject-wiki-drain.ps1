@@ -20,26 +20,20 @@ if (Test-Path $injectedFile) {
 }
 
 try {
-    $drain = Get-Content $drainFile -Raw | ConvertFrom-Json
-    $count = $drain.count
+    $null = Get-Content $drainFile -Raw | ConvertFrom-Json
 } catch {
     Write-Output "{}"
     exit 0
 }
 
-$msg = @"
-MANDATORY CONTEXT WIKI DRAIN: $count session(s) need synthesis before you address the user's request.
-
-1. Run: python "$wikiHome\scripts\update_wiki.py" --manifest
-2. For each layer2_batches entry, write extracts to extract_path (spawn subagents in batches of 10 if many).
-3. Update all six layer3_files per layer3_instruction (complete file replacements).
-4. Run: python "$wikiHome\scripts\update_wiki.py" --complete
-
-Use only facts from session transcripts. Then proceed with the user's actual request.
-If the user said to skip wiki update, run --complete and delete .drain_required.json instead.
-"@
+$env:CONTEXT_WIKI_DIR = $ctx
+$env:WIKI_HOME = $wikiHome
+$json = Invoke-WikiPython "$wikiHome\scripts\update_wiki.py" --drain-message 2>&1
+if (-not $json -or $json -eq "{}") {
+    Write-Output "{}"
+    exit 0
+}
 
 New-Item -ItemType File -Force -Path $injectedFile | Out-Null
-
-@{ agent_message = $msg } | ConvertTo-Json -Compress
+Write-Output $json
 exit 0

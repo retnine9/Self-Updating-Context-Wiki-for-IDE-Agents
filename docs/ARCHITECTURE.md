@@ -31,8 +31,8 @@ agent-transcripts/*.jsonl
 | Layer | Input | Output | Who runs it |
 |-------|-------|--------|-------------|
 | 1 | JSONL transcripts | Session markdown | `update_wiki.py --extract` (hook or manual) |
-| 2 | Session markdown | Structured extract (~400 words) | Agent LLM via `--manifest` |
-| 3 | New extracts | Updated wiki files | Agent LLM inline |
+| 2 | Session markdown | Structured extract (~400 words) | Task subagent on `synthesis_model` (default Haiku) |
+| 3 | New extracts | Updated wiki files | Task subagent on `synthesis_model` |
 
 ## Triggers
 
@@ -45,8 +45,8 @@ agent-transcripts/*.jsonl
 | File | Purpose |
 |------|---------|
 | `wiki_state.json` | `last_extract`, `last_synthesis`, `pending_sessions` |
-| `wiki_config.json` | `auto_update_on_session_start`, `batch_size` |
-| `.drain_required.json` | Written by `--prepare` when synthesis is pending |
+| `wiki_config.json` | `auto_update_on_session_start`, `batch_size`, `synthesis_model` |
+| `.drain_required.json` | Written by `--prepare` when synthesis is pending (includes `synthesis_model`) |
 | `.wiki_skip` | Skip auto-update for one session |
 
 ## Synthesis Files
@@ -61,5 +61,6 @@ agent-transcripts/*.jsonl
 ## Design Principles
 
 - **No API keys needed.**
+- **Cheap synthesis model** — Layers 2+3 run on `synthesis_model` (default `claude-4.5-haiku-thinking`) via subagents, not the user's session model.
 - **No stop hook** — sessionStart scans for new transcripts; more reliable than end-of-session hooks.
 - **Live code wins** — wiki is institutional memory, not proof of current behavior.

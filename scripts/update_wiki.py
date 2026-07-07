@@ -35,6 +35,9 @@ from lib.paths import (
 )
 from scripts import extract_context
 from scripts.synthesize_manifest import (
+    DEFAULT_SYNTHESIS_MODEL,
+    build_agent_instructions,
+    build_drain_agent_message,
     build_full_manifest,
     extract_uuid8,
     find_pending_sessions,
@@ -59,7 +62,11 @@ def log(msg: str) -> None:
 
 
 def load_config() -> dict:
-    default = {"auto_update_on_session_start": True, "batch_size": 10}
+    default = {
+        "auto_update_on_session_start": True,
+        "batch_size": 10,
+        "synthesis_model": DEFAULT_SYNTHESIS_MODEL,
+    }
     if WIKI_CONFIG_FILE.exists():
         try:
             data = json.loads(WIKI_CONFIG_FILE.read_text(encoding="utf-8"))
@@ -126,11 +133,13 @@ def cmd_prepare() -> dict:
     save_state(state)
 
     if deduped:
+        config = load_config()
         DRAIN_FLAG_FILE.write_text(
             json.dumps({
                 "count": len(deduped),
                 "uuids": deduped,
                 "set_at": _now_iso(),
+                "synthesis_model": config.get("synthesis_model", DEFAULT_SYNTHESIS_MODEL),
             }, indent=2),
             encoding="utf-8",
         )
@@ -159,6 +168,8 @@ def cmd_status() -> None:
     print(f"Last synthesis:   {state.get('last_synthesis') or 'never'}")
     print(f"Drain flag:       {'yes' if DRAIN_FLAG_FILE.exists() else 'no'}")
     print(f"Skip flag:        {'yes' if SKIP_FLAG_FILE.exists() else 'no'}")
+    config = load_config()
+    print(f"Synthesis model:  {config.get('synthesis_model', DEFAULT_SYNTHESIS_MODEL)}")
 
 
 def cmd_manifest() -> None:
@@ -171,16 +182,39 @@ def cmd_manifest() -> None:
         print(json.dumps({"pending_count": 0, "message": "No sessions pending synthesis."}))
         return
 
-    manifest = build_full_manifest(pending_paths, batch_size=config.get("batch_size", 10))
-    manifest["agent_instructions"] = (
-        "MANDATORY: Complete wiki synthesis before addressing the user's request.\n"
-        "1. For each layer2_batches entry, spawn a subagent (or process inline) to write "
-        "each extract_path using the prompt.\n"
-        "2. Read all new extracts and update each layer3_files path per layer3_instruction.\n"
-        "3. Run: python scripts/update_wiki.py --complete\n"
-        "4. Remove .drain_required.json if present."
+    synthesis_model = config.get("synthesis_model", DEFAULT_SYNTHESIS_MODEL)
+    manifest = build_full_manifest(
+        pending_paths,
+        batch_size=config.get("batch_size", 10),
+        synthesis_model=synthesis_model,
+    )
+    from lib.paths import SCRIPTS_DIR
+
+    manifest["agent_instructions"] = build_agent_instructions(
+        synthesis_model, str(SCRIPTS_DIR)
     )
     print(json.dumps(manifest, indent=2))
+
+
+def cmd_drain_message() -> None:
+    """JSON for beforeSubmitPrompt hook (agent_message)."""
+    if not DRAIN_FLAG_FILE.exists():
+        print("{}")
+        return
+    try:
+        drain = json.loads(DRAIN_FLAG_FILE.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        print("{}")
+        return
+    config = load_config()
+    model = drain.get("synthesis_model") or config.get(
+        "synthesis_model", DEFAULT_SYNTHESIS_MODEL
+    )
+    count = drain.get("count", 0)
+    from lib.paths import WIKI_HOME
+
+    msg = build_drain_agent_message(count, model, str(WIKI_HOME))
+    print(json.dumps({"agent_message": msg}))
 
 
 def cmd_complete() -> None:
@@ -214,6 +248,11 @@ def main() -> int:
     parser.add_argument("--status", action="store_true", help="Print status")
     parser.add_argument("--manifest", action="store_true", help="JSON manifest for agent")
     parser.add_argument("--complete", action="store_true", help="Clear pending after synthesis")
+    parser.add_argument(
+        "--drain-message",
+        action="store_true",
+        help="JSON agent_message for beforeSubmitPrompt hook",
+    )
     args = parser.parse_args()
 
     if not any(vars(args).values()):
@@ -236,6 +275,9 @@ def main() -> int:
         return 0
     if args.complete:
         cmd_complete()
+        return 0
+    if args.drain_message:
+        cmd_drain_message()
         return 0
     return 0
 
