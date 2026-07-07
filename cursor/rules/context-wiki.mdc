@@ -1,0 +1,50 @@
+---
+description: Unified context wiki — ingest, query, and lint session history for IDE agents.
+alwaysApply: false
+---
+
+# Context Wiki
+
+A self-updating Wikipedia on your project for AI agents. Session history is extracted, synthesized, and stored as lightweight markdown files any agent can query on demand.
+
+## Three Operations
+
+| Operation | What it does | How to trigger |
+|-----------|-------------|----------------|
+| **Ingest** | JSONL transcripts → session markdown → extracts → wiki | Automatic on session start; manual: `python scripts/update_wiki.py --all` |
+| **Query** | Read INDEX.md, sessions, extracts, or synthesis files | On demand — ask the agent |
+| **Lint** | Health-check synthesis files | Invoke the `lint-context` skill |
+
+## File Locations
+
+```
+context/
+  INDEX.md              # Session catalog (read first)
+  wiki_state.json       # last_extract, last_synthesis, pending_sessions
+  sessions/             # Layer 1: full dialogue (tool noise stripped)
+  extracts/             # Layer 2: ~400-word structured summaries
+  synthesis/            # Layer 3: cross-session wiki (6 files)
+    CAUSAL_MAP.md
+    ERROR_REFERENCE.md
+    OPEN_QUESTIONS.md
+    RULES_DRAFT.md
+    SKILLS_DRAFT.md
+    DEVELOPMENT_HISTORY.md
+```
+
+Set `CONTEXT_WIKI_DIR` to override the default (`~/.cursor/context`).
+
+## When to Consult Which File
+
+| Situation | File |
+|-----------|------|
+| "Have we tried X before?" | INDEX.md → session → extract |
+| Recurring bug | synthesis/ERROR_REFERENCE.md |
+| Unresolved decision | synthesis/OPEN_QUESTIONS.md |
+| Why does Y work this way? | synthesis/CAUSAL_MAP.md |
+
+Do NOT preload wiki content into context unless actively using it.
+
+## Source of Truth
+
+Live file reads beat wiki content. The wiki is navigation and institutional memory — not proof of current code behavior.

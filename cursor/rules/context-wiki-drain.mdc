@@ -1,0 +1,33 @@
+---
+description: Auto-drain pending wiki synthesis on session start and first user message.
+alwaysApply: true
+---
+
+# Context Wiki — Synthesis Drain
+
+## When This Runs
+
+1. **sessionStart hook** — `update_wiki.py --all` extracts new transcripts and prepares pending synthesis (unless `.wiki_skip` exists or `auto_update_on_session_start` is false in `wiki_config.json`).
+2. **First user message** — if `.drain_required.json` exists, complete synthesis before addressing the user.
+
+## Skip for This Session
+
+- Create `context/.wiki_skip` before starting, or
+- Set `"auto_update_on_session_start": false` in `wiki_config.json`, or
+- User says "skip wiki update" on first message → run `--complete` and proceed.
+
+## Drain Protocol (MANDATORY when pending)
+
+1. Run `python scripts/update_wiki.py --manifest`
+2. **Layer 2** — For each batch in `layer2_batches`, write extracts using the 7-section template:
+   - Decisions, Errors, Rejected approaches, Constraints, Technical debt, Open questions, Summary
+   - 300–500 words total per extract; cite only what is in the transcript
+   - Batch up to 10 sessions per subagent when many are pending
+3. **Layer 3** — Read new extracts; update all six `synthesis/*.md` files in-place (complete replacements, preserve stable history)
+4. Run `python scripts/update_wiki.py --complete`
+
+One informational line in the first response ("Draining N pending session(s)…") is enough. Do not ask permission.
+
+## Manual Trigger
+
+User can run anytime: `python scripts/update_wiki.py --all` or ask "update the context wiki".

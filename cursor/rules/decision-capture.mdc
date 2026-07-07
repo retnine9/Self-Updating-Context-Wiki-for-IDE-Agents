@@ -1,0 +1,29 @@
+---
+description: Capture high-signal session findings into the context wiki before session ends.
+alwaysApply: false
+---
+
+# Decision Capture
+
+At session end, file significant findings to the wiki when the session produced:
+
+- A resolved architectural ambiguity
+- A bug root cause likely to recur
+- A repeatable workflow that worked
+- Resolution of an open question in `synthesis/OPEN_QUESTIONS.md`
+
+Skip for routine edits (config tweaks, log review, single-file fixes).
+
+## Direct Wiki Update
+
+| Finding | Target file |
+|---------|-------------|
+| Recurring bug pattern | `synthesis/ERROR_REFERENCE.md` |
+| Architectural decision | `synthesis/CAUSAL_MAP.md` |
+| Resolved question | `synthesis/OPEN_QUESTIONS.md` (mark resolved) |
+| New constraint | `synthesis/RULES_DRAFT.md` |
+| New workflow | `synthesis/SKILLS_DRAFT.md` |
+
+Tag provenance: `> Filed from session {uuid8} — {YYYY-MM-DD}`
+
+Full session archival happens automatically via the ingest pipeline — no manual extract needed for routine sessions.

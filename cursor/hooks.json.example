@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "hooks": {
+    "sessionStart": [
+      {
+        "command": "powershell -ExecutionPolicy Bypass -File hooks/wiki-on-start.ps1",
+        "timeout": 120
+      }
+    ],
+    "beforeSubmitPrompt": [
+      {
+        "command": "powershell -ExecutionPolicy Bypass -File hooks/inject-wiki-drain.ps1",
+        "matcher": "UserPromptSubmit",
+        "timeout": 15
+      }
+    ]
+  }
+}
