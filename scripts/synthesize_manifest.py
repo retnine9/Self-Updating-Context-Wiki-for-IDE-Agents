@@ -118,14 +118,15 @@ def build_layer2_batches(sessions: list[Path], batch_size: int = 10) -> list[dic
     return batches
 
 
-def build_agent_instructions(synthesis_model: str, scripts_dir: str) -> str:
+def build_agent_instructions(synthesis_model: str, scripts_dir: str, platform: str = "cursor") -> str:
+    subagent_clause = _subagent_clause(platform, synthesis_model)
     return (
         "MANDATORY: Complete wiki synthesis before addressing the user's request.\n"
         f"Use model {synthesis_model!r} for ALL Layer 2 and Layer 3 LLM work — do not "
-        "synthesize on the session's main model (e.g. Opus/Fable).\n"
-        "1. Layer 2: spawn one Task subagent per layer2_batches entry with "
-        f'model="{synthesis_model}". Each subagent writes every extract_path in its batch.\n'
-        "2. Layer 3: spawn one Task subagent with the same model to read new extracts "
+        "synthesize on the session's main model (e.g. Opus/Fable/GPT-5.5).\n"
+        "1. Layer 2: spawn one subagent per layer2_batches entry with "
+        f"{subagent_clause}. Each subagent writes every extract_path in its batch.\n"
+        "2. Layer 3: spawn one subagent with the same model to read new extracts "
         "and rewrite all six layer3_files per layer3_instruction.\n"
         f"3. Run: python {scripts_dir}/update_wiki.py --complete\n"
         "4. Remove .drain_required.json if still present.\n"
@@ -133,20 +134,30 @@ def build_agent_instructions(synthesis_model: str, scripts_dir: str) -> str:
     )
 
 
+def _subagent_clause(platform: str, model: str) -> str:
+    if platform == "claude":
+        return f'model="{model}" via the Agent tool (the tool renamed from Task in v2.1.x)'
+    if platform == "codex":
+        return f'model="{model}" via a native Codex subagent (~/.codex/agents/wiki-synthesizer.toml)'
+    return f'model="{model}"'
+
+
 def build_drain_agent_message(
     pending_count: int,
     synthesis_model: str,
     wiki_home: str,
+    platform: str = "cursor",
 ) -> str:
     scripts = f"{wiki_home}/scripts/update_wiki.py".replace("\\", "/")
+    spawn = _subagent_clause(platform, synthesis_model)
     return (
         f"MANDATORY CONTEXT WIKI DRAIN: {pending_count} session(s) need synthesis "
         f"before you address the user's request.\n\n"
         f"Synthesis model (required): {synthesis_model}\n"
-        "Do NOT run Layer 2/3 on your session model — spawn Task subagents with this model.\n\n"
+        f"Do NOT run Layer 2/3 on your session model — spawn subagents. ({spawn})\n\n"
         f"1. Run: python {scripts} --manifest\n"
-        f"2. Layer 2: one subagent per layer2_batches batch (model={synthesis_model})\n"
-        f"3. Layer 3: one subagent to update all six synthesis files (model={synthesis_model})\n"
+        f"2. Layer 2: one subagent per layer2_batches batch ({spawn})\n"
+        f"3. Layer 3: one subagent to update all six synthesis files ({spawn})\n"
         f"4. Run: python {scripts} --complete\n\n"
         "Use only facts from session transcripts. Then proceed with the user's request.\n"
         "If the user said to skip wiki update, run --complete and delete .drain_required.json."

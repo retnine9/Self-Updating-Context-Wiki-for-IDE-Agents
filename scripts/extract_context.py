@@ -11,7 +11,6 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import json
 import re
 import sys
 from datetime import datetime, timezone
@@ -22,99 +21,16 @@ _REPO = Path(__file__).resolve().parent.parent
 if str(_REPO) not in sys.path:
     sys.path.insert(0, str(_REPO))
 
-from lib.paths import CONTEXT_DIR, INDEX_FILE, SESSIONS_DIR, TRANSCRIPTS_DIR
+from lib.paths import CONTEXT_DIR, INDEX_FILE, SESSIONS_DIR
+from lib.platform import get_platform
+from lib.platform.base import SessionRef, session_mtime
+from lib.transcripts import parse_turns
 
 POST30_CUTOFF = datetime(2026, 4, 3, tzinfo=timezone.utc)
-TRUNCATE_BYTES = 10_000
-
-XML_WRAPPERS = [
-    "user_query",
-    "system_reminder",
-    "attached_files",
-    "open_and_recently_viewed_files",
-    "task_notification",
-    "rules",
-    "agent_skills",
-    "agent_transcripts",
-    "user_info",
-    "system-communication",
-    "tone_and_style",
-    "tool_calling",
-    "making_code_changes",
-    "linter_errors",
-    "citing_code",
-    "inline_line_numbers",
-    "terminal_files_information",
-    "task_management",
-    "mode_selection",
-    "available_skills",
-    "always_applied_workspace_rules",
-    "always_applied_workspace_rule",
-]
 
 
-def get_session_mtime(session_dir: Path) -> datetime:
-    main_jsonl = session_dir / f"{session_dir.name}.jsonl"
-    if main_jsonl.exists():
-        return datetime.fromtimestamp(main_jsonl.stat().st_mtime, tz=timezone.utc)
-    return datetime.fromtimestamp(session_dir.stat().st_mtime, tz=timezone.utc)
-
-
-def strip_xml_wrappers(text: str) -> str:
-    for tag in XML_WRAPPERS:
-        pattern = rf"<{tag}(?:\s[^>]*)?>[\s]*(.*?)[\s]*</{tag}>"
-        text = re.sub(pattern, r"\1", text, flags=re.DOTALL)
-        text = re.sub(rf"</?{tag}(?:\s[^>]*)?>", "", text)
-    return text.strip()
-
-
-def maybe_truncate(text: str, label: str = "content") -> str:
-    encoded = text.encode("utf-8")
-    if len(encoded) <= TRUNCATE_BYTES:
-        return text
-    kb = len(encoded) / 1024
-    return f"{text[:500]}\n\n[...truncated {kb:.0f}kb {label}]"
-
-
-def extract_text_blocks(content: list, role: str, is_post30: bool) -> str:
-    parts = []
-    for block in content:
-        btype = block.get("type", "")
-        if btype == "text":
-            text = block.get("text", "")
-            if role == "user":
-                text = strip_xml_wrappers(text)
-            if text.strip():
-                parts.append(maybe_truncate(text.strip(), "text block"))
-        elif btype in ("tool_use", "tool_result") and is_post30:
-            pass
-        elif btype not in ("text", "tool_use", "tool_result"):
-            text = block.get("text", "") or block.get("content", "")
-            if isinstance(text, str) and text.strip():
-                parts.append(maybe_truncate(text.strip(), "unknown block"))
-    return "\n\n".join(parts)
-
-
-def parse_jsonl(filepath: Path, is_post30: bool) -> list[dict]:
-    turns = []
-    with open(filepath, "r", encoding="utf-8", errors="replace") as f:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                obj = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            role = obj.get("role", "unknown")
-            message = obj.get("message", {})
-            content = message.get("content", [])
-            if isinstance(content, str):
-                content = [{"type": "text", "text": content}]
-            text = extract_text_blocks(content, role, is_post30)
-            if text:
-                turns.append({"role": role, "text": text})
-    return turns
+def get_session_mtime(ref: SessionRef) -> datetime:
+    return session_mtime(ref)
 
 
 def slugify(text: str, max_len: int = 40) -> str:
@@ -160,13 +76,13 @@ def build_session_markdown(
     return "\n".join(lines)
 
 
-def process_session(session_dir: Path, force: bool = False) -> dict | None:
-    uuid = session_dir.name
-    main_jsonl = session_dir / f"{uuid}.jsonl"
+def process_session(ref: SessionRef, force: bool = False) -> dict | None:
+    uuid = ref.uuid
+    main_jsonl = ref.main_jsonl
     if not main_jsonl.exists():
         return None
 
-    mtime = get_session_mtime(session_dir)
+    mtime = get_session_mtime(ref)
     date_str = mtime.strftime("%Y-%m-%d")
     is_post30 = mtime >= POST30_CUTOFF
     era = "post-3.0" if is_post30 else "pre-3.0"
@@ -188,25 +104,24 @@ def process_session(session_dir: Path, force: bool = False) -> dict | None:
             "skipped": True,
         }
 
-    turns = parse_jsonl(main_jsonl, is_post30)
+    platform_name = get_platform().name
+    turns = parse_turns(main_jsonl, platform_name, is_post30)
     if not turns:
         return None
 
     title = derive_title(turns)
     subagent_sections = []
-    subagents_dir = session_dir / "subagents"
-    if subagents_dir.exists():
-        for sub_file in sorted(subagents_dir.glob("*.jsonl")):
-            sub_uuid = sub_file.stem
-            sub_turns = parse_jsonl(sub_file, is_post30)
-            if not sub_turns:
-                continue
-            sub_title = derive_title(sub_turns)
-            section_lines = [f"### Subagent {sub_uuid[:8]}: {sub_title}"]
-            for t in sub_turns:
-                role_label = "**User:**" if t["role"] == "user" else "**Assistant:**"
-                section_lines.append(f"\n{role_label}\n\n{t['text']}")
-            subagent_sections.append("\n".join(section_lines))
+    for sub_file in sorted(ref.subagent_jsonls):
+        sub_uuid = sub_file.stem
+        sub_turns = parse_turns(sub_file, platform_name, is_post30)
+        if not sub_turns:
+            continue
+        sub_title = derive_title(sub_turns)
+        section_lines = [f"### Subagent {sub_uuid[:8]}: {sub_title}"]
+        for t in sub_turns:
+            role_label = "**User:**" if t["role"] == "user" else "**Assistant:**"
+            section_lines.append(f"\n{role_label}\n\n{t['text']}")
+        subagent_sections.append("\n".join(section_lines))
 
     out_path = SESSIONS_DIR / f"{date_str}_{slugify(title)}_{uuid[:8]}.md"
     SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
@@ -271,19 +186,18 @@ def build_index(sessions: list[dict]) -> None:
 
 def extract_all(force: bool = False) -> dict:
     """Extract all transcript sessions. Returns summary dict."""
-    if not TRANSCRIPTS_DIR.exists():
-        return {"processed": 0, "skipped": 0, "failed": 0, "error": f"No transcripts dir: {TRANSCRIPTS_DIR}"}
+    platform = get_platform()
+    sessions = platform.discover_sessions()
+    if not sessions:
+        td = platform.resolve_transcripts_dir()
+        return {"processed": 0, "skipped": 0, "failed": 0, "error": f"No transcripts dir or sessions: {td}"}
 
-    session_dirs = sorted(
-        [d for d in TRANSCRIPTS_DIR.iterdir() if d.is_dir()],
-        key=lambda d: d.stat().st_mtime,
-    )
     processed = skipped = failed = 0
     all_meta = []
 
-    for session_dir in session_dirs:
+    for ref in sessions:
         try:
-            result = process_session(session_dir, force=force)
+            result = process_session(ref, force=force)
             if result:
                 all_meta.append(result)
                 if result.get("skipped"):
@@ -311,11 +225,12 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.session:
-        matches = [d for d in TRANSCRIPTS_DIR.iterdir() if d.is_dir() and d.name.startswith(args.session)] if TRANSCRIPTS_DIR.exists() else []
-        if not matches:
+        platform = get_platform()
+        ref = platform.find_session(args.session)
+        if not ref:
             print(f"ERROR: No session for {args.session!r}", file=sys.stderr)
             sys.exit(1)
-        result = process_session(matches[0], force=True)
+        result = process_session(ref, force=True)
         if result:
             print(f"Extracted: {result['path'].name}")
         build_index(collect_all_metadata())

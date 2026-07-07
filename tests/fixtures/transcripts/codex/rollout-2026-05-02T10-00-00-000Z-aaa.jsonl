@@ -1,0 +1,6 @@
+{"timestamp":"t0","type":"session_meta","payload":{"cwd":"/p"}}
+{"timestamp":"t1","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"do the thing"}]}}
+{"timestamp":"t2","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"ok doing it"}]}}
+{"timestamp":"t3","type":"response_item","payload":{"type":"function_call","name":"shell","arguments":"{}","call_id":"c1"}}
+{"timestamp":"t4","type":"response_item","payload":{"type":"function_call_output","call_id":"c1","output":"done"}}
+{"timestamp":"t5","type":"event_msg","payload":{"type":"task_complete"}}

@@ -33,6 +33,7 @@ from lib.paths import (
     WIKI_CONFIG_FILE,
     WIKI_STATE_FILE,
 )
+from lib.platform import get_platform
 from scripts import extract_context
 from scripts.synthesize_manifest import (
     DEFAULT_SYNTHESIS_MODEL,
@@ -65,7 +66,7 @@ def load_config() -> dict:
     default = {
         "auto_update_on_session_start": True,
         "batch_size": 10,
-        "synthesis_model": DEFAULT_SYNTHESIS_MODEL,
+        "synthesis_model": _resolve_synthesis_model(),
     }
     if WIKI_CONFIG_FILE.exists():
         try:
@@ -74,6 +75,14 @@ def load_config() -> dict:
         except (json.JSONDecodeError, OSError):
             pass
     return default
+
+
+def _resolve_synthesis_model() -> str:
+    """Platform-aware default synthesis model."""
+    try:
+        return get_platform().default_synthesis_model()
+    except Exception:
+        return DEFAULT_SYNTHESIS_MODEL
 
 
 def load_state() -> dict:
@@ -172,7 +181,7 @@ def cmd_status() -> None:
     print(f"Synthesis model:  {config.get('synthesis_model', DEFAULT_SYNTHESIS_MODEL)}")
 
 
-def cmd_manifest() -> None:
+def cmd_manifest(platform: str | None = None) -> None:
     state = load_state()
     config = load_config()
     uuid8_list = state.get("pending_sessions") or discover_pending()
@@ -182,7 +191,7 @@ def cmd_manifest() -> None:
         print(json.dumps({"pending_count": 0, "message": "No sessions pending synthesis."}))
         return
 
-    synthesis_model = config.get("synthesis_model", DEFAULT_SYNTHESIS_MODEL)
+    synthesis_model = config.get("synthesis_model") or _resolve_synthesis_model()
     manifest = build_full_manifest(
         pending_paths,
         batch_size=config.get("batch_size", 10),
@@ -190,14 +199,16 @@ def cmd_manifest() -> None:
     )
     from lib.paths import SCRIPTS_DIR
 
+    p_name = platform or _active_platform_name()
+    manifest["platform"] = p_name
     manifest["agent_instructions"] = build_agent_instructions(
-        synthesis_model, str(SCRIPTS_DIR)
+        synthesis_model, str(SCRIPTS_DIR), platform=p_name
     )
     print(json.dumps(manifest, indent=2))
 
 
-def cmd_drain_message() -> None:
-    """JSON for beforeSubmitPrompt hook (agent_message)."""
+def cmd_drain_message(platform: str | None = None) -> None:
+    """JSON for the drain hook, in the platform-correct envelope."""
     if not DRAIN_FLAG_FILE.exists():
         print("{}")
         return
@@ -207,14 +218,46 @@ def cmd_drain_message() -> None:
         print("{}")
         return
     config = load_config()
-    model = drain.get("synthesis_model") or config.get(
-        "synthesis_model", DEFAULT_SYNTHESIS_MODEL
-    )
+    model = drain.get("synthesis_model") or config.get("synthesis_model") or _resolve_synthesis_model()
     count = drain.get("count", 0)
     from lib.paths import WIKI_HOME
 
-    msg = build_drain_agent_message(count, model, str(WIKI_HOME))
-    print(json.dumps({"agent_message": msg}))
+    p_name = platform or _active_platform_name()
+    msg = build_drain_agent_message(count, model, str(WIKI_HOME), platform=p_name)
+
+    try:
+        plat = get_platform() if p_name == _auto_platform_name() else _platform_by_name(p_name)
+    except Exception:
+        plat = None
+    fmt = plat.drain_output_format() if plat else "agent_message"
+    if fmt == "agent_message":
+        print(json.dumps({"agent_message": msg}))
+    else:
+        event = plat.hook_event_names()[1] if plat else "UserPromptSubmit"
+        print(json.dumps({
+            "hookSpecificOutput": {
+                "hookEventName": event,
+                "additionalContext": msg,
+            }
+        }))
+
+
+def _active_platform_name() -> str:
+    try:
+        return get_platform().name
+    except Exception:
+        return "cursor"
+
+
+def _auto_platform_name() -> str:
+    return _active_platform_name()
+
+
+def _platform_by_name(name: str):
+    from lib.platform.cursor import CursorPlatform
+    from lib.platform.claude import ClaudePlatform
+    from lib.platform.codex import CodexPlatform
+    return {"cursor": CursorPlatform, "claude": ClaudePlatform, "codex": CodexPlatform}[name]()
 
 
 def cmd_complete() -> None:
@@ -251,11 +294,17 @@ def main() -> int:
     parser.add_argument(
         "--drain-message",
         action="store_true",
-        help="JSON agent_message for beforeSubmitPrompt hook",
+        help="JSON drain message for the platform's UserPromptSubmit hook",
+    )
+    parser.add_argument(
+        "--platform",
+        choices=("cursor", "claude", "codex"),
+        default=None,
+        help="Override platform for --manifest / --drain-message output shape",
     )
     args = parser.parse_args()
 
-    if not any(vars(args).values()):
+    if not any(v for k, v in vars(args).items() if k != "platform"):
         parser.print_help()
         return 0
 
@@ -271,13 +320,13 @@ def main() -> int:
         cmd_status()
         return 0
     if args.manifest:
-        cmd_manifest()
+        cmd_manifest(platform=args.platform)
         return 0
     if args.complete:
         cmd_complete()
         return 0
     if args.drain_message:
-        cmd_drain_message()
+        cmd_drain_message(platform=args.platform)
         return 0
     return 0
 

@@ -1,248 +1,157 @@
-# Setup — Agent Checklist
+# Setup — Per-Platform Install
 
-Primary install path: **clone this repo and follow these steps**. No opaque scripts required.
+The context wiki installs on **Cursor**, **Claude Code**, and **Codex CLI**. All platforms share a neutral home:
 
-Optional shortcut (same steps): `install/install.ps1` (Windows) or `install/install.sh` (macOS/Linux).
+```
+~/.context-wiki/
+  runtime/    # scripts, hooks, lib, install.json, wiki.env
+  data/       # sessions/, extracts/, synthesis/, INDEX.md, wiki_state.json
+```
+
+Set the same `~/.context-wiki/data` on every platform on a machine to share one wiki across Cursor + Claude + Codex.
 
 ---
 
 ## User prompt (copy-paste)
 
-> Clone https://github.com/retnine9/Self-Updating-Context-Wiki-for-IDE-Agents and follow docs/SETUP.md to install the context wiki on this machine. Run doctor.py when finished and report results.
+> Clone https://github.com/retnine9/Self-Updating-Context-Wiki-for-IDE-Agents and follow docs/SETUP.md to install the context wiki on this machine. Auto-detect the platform (Cursor / Claude Code / Codex CLI), run install_wiki.py, then run doctor.py and report results.
 
 ---
 
 ## Prerequisites
 
-- [Cursor](https://cursor.com) with hooks enabled
-- Python 3.8+ (for Layer 1 extraction — no API keys)
+- Python 3.8+ (Layer 1 extraction — no API keys)
+- One of: Cursor (hooks enabled), Claude Code, or Codex CLI
 
 ---
 
-## Steps
-
-### 1. Clone to a stable path
-
-```powershell
-# Windows
-git clone https://github.com/retnine9/Self-Updating-Context-Wiki-for-IDE-Agents.git $env:USERPROFILE\tools\context-wiki
-```
-
-```bash
-# macOS / Linux
-git clone https://github.com/retnine9/Self-Updating-Context-Wiki-for-IDE-Agents.git ~/tools/context-wiki
-```
-
-**Verify:** `ls <clone>/scripts/update_wiki.py` exists.
-
----
-
-### 2. Find Python
+## One-command install (all platforms)
 
 From the clone directory:
 
 ```bash
-python scripts/find_python.py
-python scripts/find_python.py --write-env
+python scripts/install_wiki.py --source-repo <clone-path>
+# or force a platform:
+python scripts/install_wiki.py --platform claude
+python scripts/install_wiki.py --platform codex
+python scripts/install_wiki.py --platform cursor
 ```
 
-This writes `~/.cursor/wiki/wiki.env` with `WIKI_PYTHON`, `WIKI_HOME`, and `CONTEXT_WIKI_DIR`.
+Auto-detect order: `WIKI_PLATFORM` env → `~/.cursor/projects` exists (Cursor) → `~/.claude/projects` exists (Claude) → `~/.codex/sessions` exists (Codex) → Cursor.
 
-**Verify:** `~/.cursor/wiki/wiki.env` exists and `WIKI_PYTHON` runs `python -c "import sys; print(sys.version_info.major)"` → `3`.
+The installer:
+1. Migrates a legacy `~/.cursor/wiki` + `~/.cursor/context` into `~/.context-wiki/{runtime,data}` (leaves back-compat symlinks/junctions; re-points `~/.cursor/hooks.json`).
+2. Copies `lib/`, `scripts/`, `hooks/` to `~/.context-wiki/runtime/`.
+3. Copies rules / subagent definitions / `CLAUDE.md` or `AGENTS.md` snippet to the platform's rules dir.
+4. Initializes `~/.context-wiki/data/` (sessions/extracts/synthesis + templates).
+5. Merges wiki hooks into the platform's hook config (append-only — preserves existing hooks).
+6. Writes `~/.context-wiki/runtime/wiki.env` (`WIKI_PYTHON`, `WIKI_PLATFORM`, `WIKI_HOME`, `CONTEXT_WIKI_DIR`).
+7. Runs `doctor.py --platform <p>`.
 
-If Python is not on PATH (common on Windows), use the full path:
-
-```
-WIKI_PYTHON=C:\Users\you\AppData\Local\Python\pythoncore-3.14-64\python.exe
-```
-
----
-
-### 3. Copy runtime to `~/.cursor/wiki/`
-
-Copy these directories from the clone into `~/.cursor/wiki/`:
-
-- `lib/`
-- `scripts/`
-- `hooks/`
-
-Overwrite on re-install. **Preserve** existing `~/.cursor/wiki/wiki.env` if present.
-
-**Or run the installer:**
+**Verify:** doctor exits 0 (warnings OK for new users with no sessions yet).
 
 ```bash
-python scripts/install_wiki.py --source-repo <clone-path>
+python ~/.context-wiki/runtime/scripts/doctor.py --platform <cursor|claude|codex>
 ```
-
-**Verify:** `~/.cursor/wiki/scripts/update_wiki.py` exists.
 
 ---
 
-### 4. Copy rules
+## Platform-specific notes
 
-Copy `cursor/rules/*.mdc` → `~/.cursor/rules/`
+### Cursor
 
-Do **not** delete other rules.
+- Hook config: `~/.cursor/hooks.json` (flat `sessionStart` + `beforeSubmitPrompt`).
+- Drain envelope: `{"agent_message": "..."}`.
+- Rules: `~/.cursor/rules/*.mdc`. Skills: `~/.cursor/skills/`.
+- After install, restart Cursor and check the **Hooks** output channel for `sessionStart` activity.
 
-**Verify:** these three files exist:
+### Claude Code
 
-- `~/.cursor/rules/context-wiki.mdc`
-- `~/.cursor/rules/context-wiki-drain.mdc`
-- `~/.cursor/rules/decision-capture.mdc`
+- Hook config: `~/.claude/settings.json` under top-level `hooks` (nested `{matcher, hooks:[{type:"command",command,timeout}]}`).
+- Drain envelope: `{"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":"..."}}`.
+- Rules: `~/.claude/agents/wiki-synthesizer.md` (subagent definition, `model: claude-haiku-4-5`) + `~/.claude/CLAUDE.md` snippet.
+- The installer raises `cleanupPeriodDays` to 90 in `~/.claude/settings.json` (default 30 purges transcripts before drain can fire).
+- Drain synthesis uses the **Agent** tool (renamed from Task in v2.1.x) with `model="claude-haiku-4-5"` (full ID, not the `haiku` alias — the alias has historical 404 bugs).
+
+### Codex CLI
+
+- Hook config: `~/.codex/hooks.json` (nested `{hooks:{Event:[{matcher,hooks:[...]}]}}`).
+- Drain envelope: `{"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":"..."}}`.
+- Rules: `~/.codex/agents/wiki-synthesizer.toml` (`model = "gpt-5.4-mini"`) + `~/.codex/AGENTS.md` snippet.
+- **Hook trust flow (required):** after install, run `/hooks` once in the Codex CLI to trust the wiki hooks. Changed hooks are re-trusted by hash.
+- Windows: native support shipped 2026-03-04 (AppContainer sandbox, experimental). The installer emits `commandWindows` overrides on Windows. If `codex.exe` fails to launch with `0xC0000135`, install the VC++ Redistributable.
 
 ---
 
-### 5. Copy skills
+## Manual steps (if not using the installer)
 
-Copy to `~/.cursor/skills/`:
+Clone to a stable path, then:
 
-- `skills/lint-context/` → `~/.cursor/skills/lint-context/`
-- `skills/setup-context-wiki/` → `~/.cursor/skills/setup-context-wiki/`
-
-**Verify:** `~/.cursor/skills/lint-context/SKILL.md` exists.
-
----
-
-### 6. Initialize context data (only if missing)
-
-Create `~/.cursor/context/` with:
-
-```
-sessions/
-extracts/
-synthesis/
-```
-
-If `synthesis/` is empty, copy templates from `templates/synthesis/*.md`.
-
-If missing, also create:
-
-- `wiki_config.json` from `templates/wiki_config.example.json`
-- `wiki_state.json` as `{"last_extract":null,"last_synthesis":null,"pending_sessions":[]}`
-- `INDEX.md` with a header
+1. **Find Python:** `python scripts/find_python.py --write-env`
+2. **Copy runtime:** `lib/`, `scripts/`, `hooks/` → `~/.context-wiki/runtime/`
+3. **Copy rules** to the platform's rules dir (see above).
+4. **Init data:** create `~/.context-wiki/data/{sessions,extracts,synthesis}`; copy `templates/synthesis/*.md` if empty; copy `templates/wiki_config.example.json` → `wiki_config.json`; create `wiki_state.json` (`{"last_extract":null,"last_synthesis":null,"pending_sessions":[]}`) and `INDEX.md`.
+5. **Merge hooks** into the platform's hook config (append — do not wipe existing entries). See [PLATFORM_QUIRKS.md](PLATFORM_QUIRKS.md) for exact JSON shapes.
+6. **Write** `~/.context-wiki/runtime/install.json` and `wiki.env`.
+7. **Run doctor.**
 
 **Never delete or overwrite existing `sessions/` or `synthesis/` content on re-install.**
 
-**Verify:** `~/.cursor/context/sessions/` is writable.
+---
+
+## Re-install / update
+
+1. `git pull` in the clone.
+2. Re-run `python scripts/install_wiki.py --source-repo <clone>` (or `--platform <p>`).
+3. Run doctor again.
+
+Existing sessions and synthesis are preserved. Re-install re-points hook paths but does not wipe other hooks.
 
 ---
 
-### 7. Merge hooks (append, do not replace)
+## Migrating an existing Cursor install
 
-Edit `~/.cursor/hooks.json`. **Append** wiki hook entries; do not remove existing hooks.
-
-**Windows** — use absolute paths to `~/.cursor/wiki/hooks/`:
-
-```json
-{
-  "version": 1,
-  "hooks": {
-    "sessionStart": [{
-      "command": "powershell -ExecutionPolicy Bypass -File C:\\Users\\YOU\\.cursor\\wiki\\hooks\\wiki-on-start.ps1",
-      "timeout": 120
-    }],
-    "beforeSubmitPrompt": [{
-      "command": "powershell -ExecutionPolicy Bypass -File C:\\Users\\YOU\\.cursor\\wiki\\hooks\\inject-wiki-drain.ps1",
-      "matcher": "UserPromptSubmit",
-      "timeout": 15
-    }]
-  }
-}
-```
-
-**macOS / Linux** — use bash hooks:
-
-```json
-"sessionStart": [{
-  "command": "bash /Users/YOU/.cursor/wiki/hooks/wiki-on-start.sh",
-  "timeout": 120
-}]
-```
-
-If wiki hooks already exist, update their paths only — do not wipe other entries in `sessionStart` or `beforeSubmitPrompt`.
-
-**Verify:** hook commands point at `~/.cursor/wiki/hooks/`, not the clone path.
-
----
-
-### 8. Write `install.json`
-
-Create `~/.cursor/wiki/install.json`:
-
-```json
-{
-  "version": 1,
-  "installed_at": "2026-07-07T00:00:00Z",
-  "source_repo": "/path/to/clone",
-  "wiki_home": "/Users/you/.cursor/wiki"
-}
-```
-
-`install_wiki.py` writes this automatically.
-
----
-
-### 9. Run doctor
+If you already have `~/.cursor/wiki` + `~/.cursor/context` from a prior install:
 
 ```bash
-python ~/.cursor/wiki/scripts/doctor.py
+python scripts/migrate_to_neutral_home.py --dry-run   # preview
+python scripts/migrate_to_neutral_home.py             # move + link + re-point hooks
 ```
 
-Exit codes:
-
-| Code | Meaning |
-|------|---------|
-| 0 | All checks passed |
-| 1 | Warnings only (e.g. no transcripts yet) |
-| 2 | Failures — fix before declaring done |
-
-Agents: use `python ~/.cursor/wiki/scripts/doctor.py --json` for structured output.
-
-**Verify:** exit code 0 or 1 (warnings OK for new users).
-
----
-
-### 10. Restart Cursor
-
-Start a new Cursor session. Check the **Hooks** output channel for `sessionStart` activity.
+Moves both dirs into `~/.context-wiki/{runtime,data}`, leaves back-compat symlinks/junctions at the old locations, and re-points `~/.cursor/hooks.json` wiki hook commands at the neutral runtime. Idempotent.
 
 ---
 
 ## Layout after install
 
 ```
-~/.cursor/
-  wiki/                 # runtime (survives clone deletion)
+~/.context-wiki/
+  runtime/              # survives clone deletion
     lib/
     scripts/
     hooks/
     wiki.env
     install.json
-  context/              # data (your wiki)
+  data/                 # your wiki
     sessions/
     extracts/
     synthesis/
     wiki_state.json
-  rules/
-  skills/
+    INDEX.md
+
+~/.cursor/   (Cursor only)
+  rules/                # .mdc rules
+  skills/               # skills
+  hooks.json            # points at ~/.context-wiki/runtime/hooks
+~/.claude/   (Claude only)
+  settings.json         # hooks + cleanupPeriodDays=90
+  agents/wiki-synthesizer.md
+  CLAUDE.md
+~/.codex/    (Codex only)
   hooks.json
+  agents/wiki-synthesizer.toml
+  AGENTS.md
 ```
-
----
-
-## Re-install / update
-
-1. `git pull` in the clone
-2. Re-run step 3 (copy runtime) or `python scripts/install_wiki.py --source-repo <clone>`
-3. Run doctor again
-
-Existing sessions and synthesis are preserved.
-
----
-
-## Advanced (out of scope)
-
-Project-level install (`.context-wiki/` inside a repo) is not supported in this release. Use `CONTEXT_WIKI_DIR` to point at a custom data directory.
 
 ---
 
@@ -258,4 +167,4 @@ python scripts/update_wiki.py --status
 
 ## Troubleshooting
 
-See [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
+See [TROUBLESHOOTING.md](TROUBLESHOOTING.md) and [PLATFORM_QUIRKS.md](PLATFORM_QUIRKS.md).

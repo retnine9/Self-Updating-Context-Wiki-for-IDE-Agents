@@ -1,0 +1,6 @@
+{"type":"system","summary":"session system line"}
+{"type":"user","uuid":"u1","timestamp":"2026-05-02T14:00:00Z","sessionId":"s1","cwd":"/p","message":{"role":"user","content":"Hello, plan the port"}}
+{"type":"assistant","uuid":"a1","timestamp":"2026-05-02T14:00:05Z","message":{"role":"assistant","content":[{"type":"thinking","thinking":"let me think"},{"type":"text","text":"I will plan it."},{"type":"tool_use","id":"toolu_1","name":"Bash","input":{"command":"ls"}}]}}
+{"type":"user","uuid":"u2","timestamp":"2026-05-02T14:00:10Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_1","content":"file.txt"}]}}
+{"type":"assistant","uuid":"a2","timestamp":"2026-05-02T14:00:15Z","message":{"role":"assistant","content":[{"type":"text","text":"Done."}]}}
+{"type":"summary","summary":"unused line to skip"}

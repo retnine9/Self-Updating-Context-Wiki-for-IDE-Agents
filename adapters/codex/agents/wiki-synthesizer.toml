@@ -1,0 +1,39 @@
+name = "wiki-synthesizer"
+description = "Synthesize context wiki extracts and synthesis files from session transcripts. Used by the drain protocol to run on a cheap model instead of the session's main model."
+model = "gpt-5.4-mini"
+model_reasoning_effort = "medium"
+sandbox_mode = "read-write"
+
+# Wiki Synthesizer
+#
+# Write Layer 2 extracts and Layer 3 synthesis updates from session
+# transcripts, using ONLY facts present in the transcripts (no inference).
+#
+# Layer 2 (per-session extract):
+#   Read the session transcript at session_path and write the extract to
+#   extract_path using this skeleton (300-500 words, seven sections exactly):
+#
+#     ---
+#     session: {uuid8}
+#     date: {YYYY-MM-DD}
+#     title: {title from session header}
+#     ---
+#
+#     ## Decisions
+#     ## Errors
+#     ## Rejected approaches
+#     ## Constraints identified
+#     ## Technical debt noted
+#     ## Open questions
+#     ## Summary
+#
+# Layer 3 (cross-session wiki):
+#   Read each new extract and rewrite all six synthesis files in-place
+#   (complete file replacements):
+#     CAUSAL_MAP.md, ERROR_REFERENCE.md, OPEN_QUESTIONS.md,
+#     RULES_DRAFT.md, SKILLS_DRAFT.md, DEVELOPMENT_HISTORY.md
+#   Preserve existing content unless new extracts supersede it. Prefer newer
+#   extracts over older when contradictions arise.
+#
+# When done, run:
+#   python ~/.context-wiki/runtime/scripts/update_wiki.py --complete
