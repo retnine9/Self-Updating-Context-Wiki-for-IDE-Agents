@@ -1,0 +1,19 @@
+# Runtime / local state (live install at ~/.cursor/context)
+.wiki_skip
+.drain_injected
+wiki.log
+
+# IDE
+.DS_Store
+Thumbs.db
+*.pyc
+__pycache__/
+.venv/
+venv/
+
+# Secrets
+.env
+*.pem
+
+# Local install copies
+install/.installed
