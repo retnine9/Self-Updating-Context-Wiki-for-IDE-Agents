@@ -1,0 +1,4 @@
+{
+  "auto_update_on_session_start": true,
+  "batch_size": 10
+}

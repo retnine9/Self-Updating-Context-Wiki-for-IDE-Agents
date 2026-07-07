@@ -1,0 +1,12 @@
+{
+  "$schema": "wiki state for context wiki",
+  "properties": {
+    "last_extract": { "type": "string", "format": "date-time", "nullable": true },
+    "last_synthesis": { "type": "string", "format": "date-time", "nullable": true },
+    "pending_sessions": {
+      "type": "array",
+      "items": { "type": "string", "description": "8-char session UUID prefixes missing extracts" }
+    },
+    "last_lint": { "type": "string", "format": "date-time", "nullable": true }
+  }
+}
