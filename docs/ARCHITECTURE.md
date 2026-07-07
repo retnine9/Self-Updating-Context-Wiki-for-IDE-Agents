@@ -8,10 +8,12 @@ IDE agents start each session with no memory of prior work. The context wiki is 
 
 | Location | Contents |
 |----------|----------|
-| `~/.cursor/wiki/` | Runtime: `lib/`, `scripts/`, `hooks/`, `wiki.env`, `install.json` |
-| `~/.cursor/context/` | Data: sessions, extracts, synthesis, `wiki_state.json` |
+| `~/.context-wiki/runtime/` | Runtime: `lib/`, `scripts/`, `hooks/`, `wiki.env`, `install.json` |
+| `~/.context-wiki/data/` | Data: sessions, extracts, synthesis, `wiki_state.json` |
 
-Hooks call scripts in `~/.cursor/wiki/` so the wiki keeps working after the git clone is moved or deleted. Re-install from clone updates runtime only; existing sessions are preserved.
+Legacy Cursor installs may still resolve `~/.cursor/wiki/` and `~/.cursor/context/` via symlinks after migration.
+
+Hooks call scripts in the runtime directory so the wiki keeps working after the git clone is moved or deleted. Re-install from clone updates runtime only; existing sessions are preserved.
 
 ## Three Layers
 

@@ -8,12 +8,12 @@ The context wiki is **tool-agnostic** at the data layer — markdown files on di
 |------------|:------:|:-----------:|:---------:|
 | Query wiki (read markdown) | yes | yes | yes |
 | Manual update (`update_wiki.py --all`) | yes | yes | yes |
-| Auto Layer 1 (extract on session start) | yes | yes (Phase 1) | yes (Phase 2) |
-| Auto Layer 2/3 drain (first-message synthesis) | yes | yes (Phase 1) | yes (Phase 2) |
-| One-command install + doctor | yes | yes (Phase 1) | yes (Phase 2) |
-| Cheap-model subagent synthesis | yes | yes (Phase 1) | yes (Phase 2) |
+| Auto Layer 1 (extract on session start) | yes | yes | yes |
+| Auto Layer 2/3 drain (first-message synthesis) | yes | yes | yes |
+| One-command install + doctor | yes | yes | yes |
+| Cheap-model subagent synthesis | yes | yes | yes |
 
-Do not assume a platform is supported until its adapter phase is complete and `doctor.py --platform <p>` exits 0 on that platform. See [PLATFORM_QUIRKS.md](PLATFORM_QUIRKS.md) for the per-platform hook shapes, transcript paths, and known issues that drive each adapter.
+Run `doctor.py --platform <p>` after install to confirm your platform is wired correctly. See [PLATFORM_QUIRKS.md](PLATFORM_QUIRKS.md) for hook shapes, transcript paths, and known issues.
 
 ## Cursor (reference implementation)
 
@@ -26,7 +26,7 @@ Do not assume a platform is supported until its adapter phase is complete and `d
 - Rules in `.mdc` format under `~/.cursor/rules/`
 - Subagents via Task tool with `model=` slug (default `claude-4.5-haiku-thinking`)
 
-## Claude Code (Phase 1)
+## Claude Code
 
 - Runtime + data: same neutral `~/.context-wiki/` home (shared with Cursor if both installed).
 - `SessionStart` hook → `update_wiki.py --all`
@@ -37,7 +37,7 @@ Do not assume a platform is supported until its adapter phase is complete and `d
 - Cheap model: `Agent` tool with `model: claude-haiku-4-5` (full ID, not the `haiku` alias — avoids historical alias→404 failures).
 - Raise `cleanupPeriodDays` to ≥90 in `~/.claude/settings.json` or transcripts are purged at 30 days before drain can fire.
 
-## Codex CLI (Phase 2)
+## Codex CLI
 
 - Runtime + data: same neutral `~/.context-wiki/` home.
 - `SessionStart` hook → `update_wiki.py --all`

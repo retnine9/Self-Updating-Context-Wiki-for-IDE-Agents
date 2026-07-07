@@ -8,12 +8,12 @@ Functions as a wikipedia on a repository or project for autonomous or directed A
 |------------|:------:|:-----------:|:---------:|
 | Query wiki (read markdown) | yes | yes | yes |
 | Manual update (`update_wiki.py --all`) | yes | yes | yes |
-| Auto Layer 1 (extract on session start) | yes | yes (Phase 1) | yes (Phase 2) |
-| Auto Layer 2/3 drain (first-message synthesis) | yes | yes (Phase 1) | yes (Phase 2) |
-| One-command install + doctor | yes | yes (Phase 1) | yes (Phase 2) |
-| Cheap-model subagent synthesis | yes | yes (Phase 1) | yes (Phase 2) |
+| Auto Layer 1 (extract on session start) | yes | yes | yes |
+| Auto Layer 2/3 drain (first-message synthesis) | yes | yes | yes |
+| One-command install + doctor | yes | yes | yes |
+| Cheap-model subagent synthesis | yes | yes | yes |
 
-The wiki data (markdown on disk) is portable to any tool that can read files. **Zero-config automation today is Cursor-only**; Claude Code and Codex CLI adapters are landing in Phases 1 and 2. Do not assume full auto on those platforms until the adapter for your platform ships. See [docs/PLATFORM_QUIRKS.md](docs/PLATFORM_QUIRKS.md) for per-platform hook shapes, transcript paths, and known issues.
+Install once with `python scripts/install_wiki.py --platform <cursor|claude|codex>` (auto-detected if omitted), then hooks handle extract + drain automatically. See [docs/PLATFORM_QUIRKS.md](docs/PLATFORM_QUIRKS.md) for per-platform hook shapes, transcript paths, and known issues.
 
 ## Setup
 
@@ -27,8 +27,8 @@ and follow docs/SETUP.md on this machine.
 | Scenario | Path |
 |----------|------|
 | Cursor agent install | [docs/SETUP.md](docs/SETUP.md) |
-| Claude Code install | [docs/SETUP.md](docs/SETUP.md) — Claude section (Phase 1) |
-| Codex CLI install | [docs/SETUP.md](docs/SETUP.md) — Codex section (Phase 2) |
+| Claude Code install | [docs/SETUP.md](docs/SETUP.md) — Claude section |
+| Codex CLI install | [docs/SETUP.md](docs/SETUP.md) — Codex section |
 | Try without installing | [Examples mode](#quick-start-examples-mode) below |
 | Optional script shortcut | `install/install.ps1` (Windows) or `install/install.sh` (macOS/Linux) |
 | Per-platform quirks | [docs/PLATFORM_QUIRKS.md](docs/PLATFORM_QUIRKS.md) |
@@ -57,7 +57,7 @@ No API keys needed. Synthesis uses a cheap configured model, not your session mo
 |------|----------------|
 | **New session starts** | Scan transcripts, extract new sessions (skippable) |
 | **First message** (if pending) | Agent synthesizes extracts + wiki before your request |
-| **Manual** | `python ~/.cursor/wiki/scripts/update_wiki.py --all` or ask the agent |
+| **Manual** | `python ~/.context-wiki/runtime/scripts/update_wiki.py --all` or ask the agent |
 
 **Skip one session:** touch `~/.context-wiki/data/.wiki_skip` (or the legacy `~/.cursor/context/.wiki_skip`) or set `"auto_update_on_session_start": false` in `wiki_config.json`.
 

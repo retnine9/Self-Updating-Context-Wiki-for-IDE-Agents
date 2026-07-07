@@ -3,10 +3,6 @@
 Transcripts: transcript_path from hook stdin JSON, or ~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl
 Hooks: ~/.codex/hooks.json (nested {hooks:{Event:[{matcher,hooks:[...]}]}}).
 Drain inject: UserPromptSubmit -> hookSpecificOutput.additionalContext.
-
-Note: full Codex adapter ships in Phase 2. This module is present so platform
-detection and the contract compile; the transcript parser is implemented in
-lib/transcripts/codex.py.
 """
 from __future__ import annotations
 
