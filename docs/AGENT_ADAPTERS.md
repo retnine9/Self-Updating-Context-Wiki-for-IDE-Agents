@@ -4,6 +4,10 @@ The context wiki is **tool-agnostic** — it is markdown files on disk. Any agen
 
 ## Cursor (reference implementation)
 
+**Install:** [SETUP.md](SETUP.md) — clone + agent checklist, or `install/install.ps1` / `install.sh`.
+
+- Runtime: `~/.cursor/wiki/scripts/update_wiki.py`
+- Data: `~/.cursor/context/`
 - `sessionStart` hook → `update_wiki.py --all`
 - `beforeSubmitPrompt` hook → synthesis mandate
 - Rules in `.mdc` format
@@ -15,7 +19,7 @@ Implement the same loop:
 ```
 on session_start:
     if not skipped:
-        run update_wiki.py --all
+        run ~/.cursor/wiki/scripts/update_wiki.py --all
 
 on first_user_message:
     if wiki_state.pending_sessions non-empty:
@@ -26,6 +30,8 @@ on first_user_message:
 on demand:
     user runs update_wiki.py --all or asks to update wiki
 ```
+
+Point `CONTEXT_WIKI_DIR` at your wiki data directory if not using `~/.cursor/context/`.
 
 ## Query Pattern
 
