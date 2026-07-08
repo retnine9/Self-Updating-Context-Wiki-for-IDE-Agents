@@ -1,6 +1,6 @@
 # Self-Updating-Context-Wiki-for-IDE-Agents
 
-Functions as a wikipedia on a repository or project for autonomous or directed AI agents. Works with Cursor, Claude Code, and Codex CLI. Lightweight MD files that allow any agent to reference anything that happened in the past.
+Functions as an automatic wikipedia on a repository or project for Cursor, Claude Code, Codex, etc. Lightweight MD files that allow any agent to reference anything that happened in the past.
 
 ## Platform Support
 
